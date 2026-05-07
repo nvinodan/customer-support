@@ -2,6 +2,7 @@ import express from 'express';
 import { agent } from './agent.js';
 import { ModelStreamUpdateEvent } from '@strands-agents/sdk';
 import { retrieveMemories, storeMemory } from './memory.js';
+import { setWorkloadToken } from './tools/searchNews.js';
 
 const PORT = process.env.PORT || 8080;
 
@@ -34,6 +35,13 @@ app.post('/invocations', express.raw({ type: '*/*' }), async (req, res) => {
   }
 
   const sessionId = (req.headers['x-amzn-agentcore-session-id'] as string) ?? payloadSessionId;
+
+  const workloadToken = req.headers['x-amzn-bedrock-agentcore-workload-access-token'] as string | undefined;
+  console.log(`[runtime] Workload token header present: ${!!workloadToken}`);
+  console.log(`[runtime] Request headers: ${Object.keys(req.headers).filter(h => h.startsWith('x-amzn')).join(', ')}`);
+  if (workloadToken) {
+    setWorkloadToken(workloadToken);
+  }
 
   const memories = await retrieveMemories(prompt, sessionId);
   const augmentedPrompt = memories

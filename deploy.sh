@@ -5,6 +5,8 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
 RUNTIME_NAME="${RUNTIME_NAME:-customer_support_agent}"
+CREDENTIAL_PROVIDER_NAME="${CREDENTIAL_PROVIDER_NAME:-tavily-api}"
+WORKLOAD_NAME="${WORKLOAD_NAME:-${RUNTIME_NAME}}"
 ECR_REPO_NAME="${ECR_REPO_NAME:-$RUNTIME_NAME}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 ROLE_NAME="${ROLE_NAME:-${RUNTIME_NAME}-execution-role}"
@@ -117,6 +119,21 @@ INLINE_POLICY=$(cat <<POLICY
         "arn:aws:bedrock:*::foundation-model/*",
         "arn:aws:bedrock:${AWS_REGION}:${AWS_ACCOUNT_ID}:*"
       ]
+    },
+    {
+      "Sid": "AgentCoreIdentityAccess",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:GetWorkloadAccessToken",
+        "bedrock-agentcore:GetResourceApiKey"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SecretsManagerAccess",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "*"
     }
   ]
 }
@@ -228,11 +245,22 @@ fi
 echo "    Waiting for IAM propagation..."
 sleep 15
 
+# --- AgentCore Identity (Workload) ---
+
+echo "==> Creating or reusing workload identity: ${WORKLOAD_NAME}..."
+if aws bedrock-agentcore-control create-workload-identity \
+  --name "${WORKLOAD_NAME}" \
+  --region "${AWS_REGION}" 2>&1 | grep -q -e "ConflictException" -e "already exists"; then
+  echo "    Workload identity '${WORKLOAD_NAME}' already exists."
+else
+  echo "    Workload identity '${WORKLOAD_NAME}' created."
+fi
+
 # --- Create or update AgentCore runtime ---
 
-ENV_VARS_FLAG=""
+ENV_VARS_FLAG="--environment-variables CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
 if [ -n "$MEMORY_ID" ]; then
-  ENV_VARS_FLAG="--environment-variables MEMORY_ID=${MEMORY_ID}"
+  ENV_VARS_FLAG="--environment-variables MEMORY_ID=${MEMORY_ID},CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
 fi
 
 echo "==> Creating or updating AgentCore runtime..."
@@ -293,3 +321,5 @@ if [ -n "$MEMORY_ID" ]; then
   echo "    For local development, set:"
   echo "    export MEMORY_ID=${MEMORY_ID}"
 fi
+echo ""
+echo "    Credential provider: ${CREDENTIAL_PROVIDER_NAME}"
