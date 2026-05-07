@@ -12,7 +12,12 @@ const memoryClient = MEMORY_ID
   : null;
 
 export async function retrieveMemories(query: string, namespace: string): Promise<string> {
-  if (!memoryClient || !MEMORY_ID) return '';
+  if (!memoryClient || !MEMORY_ID) {
+    console.log('[memory:retrieve] Skipped — MEMORY_ID not configured');
+    return '';
+  }
+
+  console.log(`[memory:retrieve] namespace=${namespace} query="${query.slice(0, 100)}"`);
 
   try {
     const response = await memoryClient.send(
@@ -24,6 +29,7 @@ export async function retrieveMemories(query: string, namespace: string): Promis
     );
 
     const records = response.memoryRecordSummaries ?? [];
+    console.log(`[memory:retrieve] Found ${records.length} records`);
     if (!records.length) return '';
 
     return records
@@ -31,7 +37,7 @@ export async function retrieveMemories(query: string, namespace: string): Promis
       .filter(Boolean)
       .join('\n');
   } catch (err) {
-    console.error('Memory retrieval failed:', err);
+    console.error('[memory:retrieve] Failed:', err);
     return '';
   }
 }
@@ -41,12 +47,17 @@ export async function storeMemory(
   agentResponse: string,
   namespace: string,
 ): Promise<void> {
-  if (!memoryClient || !MEMORY_ID) return;
+  if (!memoryClient || !MEMORY_ID) {
+    console.log('[memory:store] Skipped — MEMORY_ID not configured');
+    return;
+  }
 
   const facts = [
     `User: ${userMessage.slice(0, 500)}`,
     `Agent: ${agentResponse.slice(0, 500)}`,
   ];
+
+  console.log(`[memory:store] namespace=${namespace} storing ${facts.length} records`);
 
   try {
     await memoryClient.send(
@@ -60,7 +71,8 @@ export async function storeMemory(
         })),
       })
     );
+    console.log(`[memory:store] Success`);
   } catch (err) {
-    console.error('Memory write failed:', err);
+    console.error('[memory:store] Failed:', err);
   }
 }

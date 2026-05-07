@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration (override via environment variables)
 AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
-RUNTIME_NAME="${RUNTIME_NAME:-customer_agent}"
+RUNTIME_NAME="${RUNTIME_NAME:-customer_support_agent}"
 ECR_REPO_NAME="${ECR_REPO_NAME:-$RUNTIME_NAME}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 ROLE_NAME="${ROLE_NAME:-${RUNTIME_NAME}-execution-role}"
@@ -159,21 +159,28 @@ if MEMORY_RESULT=$(aws bedrock-agentcore-control create-memory \
   --name "${MEMORY_NAME}" \
   --description "Session memory for ${RUNTIME_NAME}" \
   --region "${AWS_REGION}" \
-  --event-expiry-duration 86400 \
-  --memory-strategies '[{"semanticMemoryStrategy":{"name":"session-context","description":"Stores conversation turns for session continuity","namespace":"session"}}]' \
+  --event-expiry-duration 30 \
+  --memory-strategies '[{"semanticMemoryStrategy":{"name":"session_context","description":"Stores conversation turns for session continuity","namespaces":["session"]}}]' \
   2>&1); then
   echo "    Memory created."
 else
-  if echo "$MEMORY_RESULT" | grep -q "ConflictException"; then
+  if echo "$MEMORY_RESULT" | grep -q -e "ConflictException" -e "already exists"; then
     echo "    Memory already exists, fetching ID..."
     MEMORY_ID=$(aws bedrock-agentcore-control list-memories \
       --region "${AWS_REGION}" \
-      --query "memories[?name=='${MEMORY_NAME}'].memoryId | [0]" --output text)
+      --output json | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for m in data.get('memories', []):
+    if '${MEMORY_NAME}' in m.get('arn', '') or '${MEMORY_NAME}' in m.get('id', ''):
+        print(m['id'])
+        break
+" 2>/dev/null || true)
     if [ -z "$MEMORY_ID" ] || [ "$MEMORY_ID" = "None" ]; then
       echo "==> WARNING: Could not resolve memory ID. Skipping memory setup."
       MEMORY_ID=""
     else
-      MEMORY_RESULT="{\"memoryId\": \"${MEMORY_ID}\"}"
+      MEMORY_RESULT="{\"id\": \"${MEMORY_ID}\"}"
     fi
   else
     echo "==> WARNING: Failed to create memory (non-fatal):"
@@ -183,7 +190,7 @@ else
 fi
 
 if [ -n "${MEMORY_RESULT:-}" ] && [ -z "$MEMORY_ID" ]; then
-  MEMORY_ID=$(echo "$MEMORY_RESULT" | grep -o '"memoryId": *"[^"]*"' | head -1 | sed 's/.*"memoryId": *"//;s/"//' || true)
+  MEMORY_ID=$(echo "$MEMORY_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id', d.get('memoryId','')))" 2>/dev/null || true)
 fi
 
 if [ -n "$MEMORY_ID" ]; then
