@@ -8,7 +8,6 @@ It handles order queries and delegates refunds to a specialist sub-agent using t
 - TypeScript, tsx
 - @strands-agents/sdk
 - Zod for tool input schemas
-- AWS Bedrock (Claude 3.5 Sonnet)
 
 ## How to run
 ```
