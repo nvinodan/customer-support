@@ -190,7 +190,7 @@ for m in data.get('memories', []):
 fi
 
 if [ -n "${MEMORY_RESULT:-}" ] && [ -z "$MEMORY_ID" ]; then
-  MEMORY_ID=$(echo "$MEMORY_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id', d.get('memoryId','')))" 2>/dev/null || true)
+  MEMORY_ID=$(echo "$MEMORY_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('memory',d).get('id',''))" 2>/dev/null || true)
 fi
 
 if [ -n "$MEMORY_ID" ]; then
