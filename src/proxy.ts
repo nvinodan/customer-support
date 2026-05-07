@@ -21,11 +21,13 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/api/chat', async (req, res) => {
-  const { message } = req.body as { message?: string };
+  const { message, sessionId } = req.body as { message?: string; sessionId?: string };
   if (!message || message.trim() === '') {
     res.status(400).json({ error: 'message is required' });
     return;
   }
+
+  const resolvedSessionId = sessionId ?? `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -34,9 +36,9 @@ app.post('/api/chat', async (req, res) => {
   try {
     const command = new InvokeAgentRuntimeCommand({
       agentRuntimeArn: AGENT_RUNTIME_ARN,
-      runtimeSessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
+      runtimeSessionId: resolvedSessionId,
       qualifier: 'DEFAULT',
-      payload: new TextEncoder().encode(JSON.stringify({ prompt: message })),
+      payload: new TextEncoder().encode(JSON.stringify({ prompt: message, sessionId: resolvedSessionId })),
     });
 
     const response = await client.send(command);

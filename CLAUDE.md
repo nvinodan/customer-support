@@ -41,6 +41,7 @@ src/
   runtime.ts        — AgentCore runtime (/ping + /invocations, streams SSE)
   proxy.ts          — Proxy server: UI → AgentCore SDK → runtime
   agent.ts          — orchestrator agent
+  memory.ts         — AgentCore Memory retrieve/store (graceful no-op if MEMORY_ID unset)
   prompts/prompt.md — system prompt (loaded at runtime)
   tools/
     getOrderStatus.ts   — mock order lookup
@@ -55,14 +56,14 @@ ui/
     components/Message.tsx
     hooks/useChat.ts
 Dockerfile          — ARM64 container for AgentCore
-deploy.sh           — Build, push to ECR, create/update runtime
+deploy.sh           — Build, push to ECR, create/update runtime, set up memory
 tsconfig.build.json — Compilation config for container
 ```
 
 ## API
 
 ### UI endpoint (server.ts or proxy.ts)
-`POST /api/chat` — `{ message: string }` → SSE stream of JSON-encoded text chunks, terminated by `data: [DONE]`
+`POST /api/chat` — `{ message: string, sessionId?: string }` → SSE stream of JSON-encoded text chunks, terminated by `data: [DONE]`
 
 ### AgentCore contract (runtime.ts)
 - `GET /ping` → `{ status: "Healthy", time_of_last_update: <unix> }`
@@ -76,6 +77,7 @@ tsconfig.build.json — Compilation config for container
 | `AGENT_RUNTIME_ARN` | proxy | ARN of the deployed AgentCore runtime |
 | `AWS_ACCOUNT_ID` | deploy | AWS account for ECR/AgentCore |
 | `PORT` | runtime, proxy | Listen port (runtime: 8080, proxy: 3001) |
+| `MEMORY_ID` | runtime, server | AgentCore Memory resource ID (optional — memory disabled if unset) |
 
 ## Conventions
 - No `any` types

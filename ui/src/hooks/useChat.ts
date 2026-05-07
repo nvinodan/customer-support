@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 export interface Message {
   id: string;
@@ -9,6 +9,7 @@ export interface Message {
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const sessionIdRef = useRef(`session-${crypto.randomUUID()}`);
 
   const sendMessage = useCallback(async (text: string) => {
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', text };
@@ -20,7 +21,7 @@ export function useChat() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, sessionId: sessionIdRef.current }),
       });
       if (!res.body) throw new Error('No response body');
 
