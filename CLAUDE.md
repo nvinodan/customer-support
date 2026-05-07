@@ -1,41 +1,53 @@
 # customer-support-agent
 
-## What this project does
-A customer support agent backend built with Claude on AWS Bedrock via the Strands Agents SDK.
-It handles order queries and delegates refunds to a specialist sub-agent using the agent-as-tool pattern.
+A customer support agent on AWS Bedrock (Strands Agents SDK) with a React streaming chat UI.
 
-## Tech stack
-- TypeScript, tsx
-- @strands-agents/sdk
-- Zod for tool input schemas
+## Stack
+- **Backend**: TypeScript, tsx, Express, cors, dotenv, `@strands-agents/sdk`, Zod
+- **Frontend**: React + Vite + Tailwind CSS (`ui/`), native `fetch` with `ReadableStream`
 
-## How to run
+## Run
+
+```bash
+# Backend
+cp .env.example .env  # fill in AWS creds
+npx tsx src/server.ts  # port 3001
+
+# Frontend
+cd ui && npm install && npm run dev  # port 5173
 ```
-npx tsx src/index.ts
+
+## Structure
+
+```
+src/
+  index.ts          — CLI entry point (do not modify)
+  server.ts         — Express server, POST /api/chat (SSE)
+  agent.ts          — orchestrator agent
+  prompts/prompt.md — system prompt (loaded at runtime)
+  tools/
+    getOrderStatus.ts   — mock order lookup
+    initiateRefund.ts   — mock refund processor
+  subagents/
+    refundAgent.ts  — refund specialist sub-agent
+ui/
+  vite.config.ts    — proxies /api → API_URL
+  .env.example      — API_URL=http://localhost:3001
+  src/
+    App.tsx
+    components/ChatWindow.tsx
+    components/Message.tsx
+    hooks/useChat.ts
 ```
 
-Requires AWS credentials configured in the environment and `AWS_REGION` set (defaults to `us-west-2`).
+## API
 
-## Project structure
-- `src/index.ts` — entry point, runs two test queries
-- `src/agent.ts` — orchestrator agent, loads system prompt from src/prompt.md
-- `src/prompts/prompt.md` — runtime system prompt (loaded at runtime, not hardcoded)
-- `src/tools/getOrderStatus.ts` — returns order details by order ID
-- `src/tools/initiateRefund.ts` — processes a refund and returns confirmation
+`POST /api/chat` — `{ message: string }` → SSE stream of JSON-encoded text chunks, terminated by `data: [DONE]`
 
-## When adding a new tool
-1. Create the file in `src/tools/` — export one `ZodTool` instance named after the file
-2. Import and add it to the `tools` array in `src/agent.ts`
-3. Update `src/prompt.md` to describe the new tool's purpose
+Each SSE line: `data: "chunk"\n\n`
 
-## When adding a new sub-agent
-1. Create the file in `src/subagents/` — export one `Agent` instance
-2. Pass `agent.asTool()` into the `tools` array in `src/agent.ts`
-3. Update `src/prompt.md` to describe when to delegate to this sub-agent
-
-## Code conventions
+## Conventions
 - No `any` types
-- System prompt loaded from `src/prompt.md` at runtime — not hardcoded in agent.ts
-- Each tool file exports one typed `ZodTool` instance named after the file
-- Mock data stays in the tool file, marked with `// TODO: replace with real API call`
-- Comments explain WHY, not WHAT
+- System prompt from file, not hardcoded
+- Tool files export one `ZodTool`; mock data stays in the file with `// TODO: replace with real API call`
+- Frontend state in hooks only; no Redux/Zustand
