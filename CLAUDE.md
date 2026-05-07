@@ -1,20 +1,35 @@
 # customer-support-agent
 
-A customer support agent on AWS Bedrock (Strands Agents SDK) with a React streaming chat UI.
+A customer support agent on AWS Bedrock (Strands Agents SDK) with a React streaming chat UI, deployable as an AgentCore runtime.
 
 ## Stack
-- **Backend**: TypeScript, tsx, Express, cors, dotenv, `@strands-agents/sdk`, Zod
+- **Runtime**: TypeScript, Express, `@strands-agents/sdk`, Zod — AgentCore container (ARM64)
+- **Proxy**: TypeScript, Express, `@aws-sdk/client-bedrock-agentcore` — bridges UI to AgentCore
 - **Frontend**: React + Vite + Tailwind CSS (`ui/`), native `fetch` with `ReadableStream`
 
 ## Run
 
 ```bash
-# Backend
-cp .env.example .env  # fill in AWS creds
+# Local development (direct, no AgentCore)
 npx tsx src/server.ts  # port 3001
+
+# AgentCore runtime (local testing)
+npx tsx src/runtime.ts  # port 8080
+
+# Proxy server (connects UI to deployed AgentCore)
+AGENT_RUNTIME_ARN=arn:... npx tsx src/proxy.ts  # port 3001
 
 # Frontend
 cd ui && npm install && npm run dev  # port 5173
+
+# CLI
+npx tsx src/index.ts
+```
+
+## Deploy
+
+```bash
+AWS_ACCOUNT_ID=123456789012 ./deploy.sh
 ```
 
 ## Structure
@@ -22,7 +37,9 @@ cd ui && npm install && npm run dev  # port 5173
 ```
 src/
   index.ts          — CLI entry point (do not modify)
-  server.ts         — Express server, POST /api/chat (SSE)
+  server.ts         — Express server, POST /api/chat (SSE) — local dev only
+  runtime.ts        — AgentCore runtime (/ping + /invocations, streams SSE)
+  proxy.ts          — Proxy server: UI → AgentCore SDK → runtime
   agent.ts          — orchestrator agent
   prompts/prompt.md — system prompt (loaded at runtime)
   tools/
@@ -31,20 +48,34 @@ src/
   subagents/
     refundAgent.ts  — refund specialist sub-agent
 ui/
-  vite.config.ts    — proxies /api → API_URL
-  .env.example      — API_URL=http://localhost:3001
+  vite.config.ts    — proxies /api → localhost:3001
   src/
     App.tsx
     components/ChatWindow.tsx
     components/Message.tsx
     hooks/useChat.ts
+Dockerfile          — ARM64 container for AgentCore
+deploy.sh           — Build, push to ECR, create/update runtime
+tsconfig.build.json — Compilation config for container
 ```
 
 ## API
 
+### UI endpoint (server.ts or proxy.ts)
 `POST /api/chat` — `{ message: string }` → SSE stream of JSON-encoded text chunks, terminated by `data: [DONE]`
 
-Each SSE line: `data: "chunk"\n\n`
+### AgentCore contract (runtime.ts)
+- `GET /ping` → `{ status: "Healthy", time_of_last_update: <unix> }`
+- `POST /invocations` (raw body) → SSE stream, same format as `/api/chat`
+
+## Environment Variables
+
+| Variable | Used by | Description |
+|---|---|---|
+| `AWS_REGION` | runtime, proxy, deploy | AWS region (default: us-east-1) |
+| `AGENT_RUNTIME_ARN` | proxy | ARN of the deployed AgentCore runtime |
+| `AWS_ACCOUNT_ID` | deploy | AWS account for ECR/AgentCore |
+| `PORT` | runtime, proxy | Listen port (runtime: 8080, proxy: 3001) |
 
 ## Conventions
 - No `any` types

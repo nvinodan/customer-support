@@ -1,6 +1,6 @@
 import { Agent, ZodTool } from '@strands-agents/sdk';
 import { z } from 'zod';
-import { initiateRefund } from '../tools/initiateRefund.ts';
+import { initiateRefund } from '../tools/initiateRefund.js';
 
 const refundAgent = new Agent({
   model: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',

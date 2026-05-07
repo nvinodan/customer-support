@@ -1,5 +1,5 @@
 import readline from 'readline';
-import { agent } from './agent.ts';
+import { agent } from './agent.js';
 
 const rl = readline.createInterface({
   input: process.stdin,

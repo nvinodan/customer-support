@@ -1,13 +1,15 @@
 import { Agent } from '@strands-agents/sdk';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { getOrderStatus } from './tools/getOrderStatus.ts';
-import { refundAgentTool } from './subagents/refundAgent.ts';
+import { getOrderStatus } from './tools/getOrderStatus.js';
+import { refundAgentTool } from './subagents/refundAgent.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Loaded at runtime so the prompt can be edited without recompiling
-const systemPrompt = readFileSync(join(__dirname, 'prompts/prompt.md'), 'utf-8');
+const promptPath = existsSync(join(__dirname, 'prompts/prompt.md'))
+  ? join(__dirname, 'prompts/prompt.md')
+  : join(__dirname, '../src/prompts/prompt.md');
+const systemPrompt = readFileSync(promptPath, 'utf-8');
 
 export const agent = new Agent({
   systemPrompt,

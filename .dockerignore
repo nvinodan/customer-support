@@ -1,0 +1,8 @@
+node_modules
+dist
+ui
+.git
+.claude
+developer_prompts
+*.md
+!src/prompts/prompt.md

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { agent } from './agent.ts';
+import { agent } from './agent.js';
 import { ModelStreamUpdateEvent } from '@strands-agents/sdk';
 
 const app = express();
