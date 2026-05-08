@@ -33,81 +33,19 @@ cd ui && npm install
 npm install @tailwindcss/vite tailwindcss
 ```
 
-**`ui/vite.config.ts`**
-```ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
+**`ui/vite.config.ts`** — add the Tailwind plugin and a dev-server proxy so `/api` requests forward to `http://localhost:3001`
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: { proxy: { '/api': 'http://localhost:3001' } },
-});
-```
+**`ui/src/index.css`** — import Tailwind
+
+**`ui/src/App.tsx`** — render `<ChatWindow />` as the sole root component
 
 **`ui/src/hooks/useChat.ts`**
 
-```ts
-import { useState, useCallback } from 'react';
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-}
-
-export function useChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const sendMessage = useCallback(async (text: string) => {
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', text };
-    const assistantId = crypto.randomUUID();
-    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', text: '' }]);
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
-      });
-      if (!res.body) throw new Error('No response body');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6);
-          if (payload === '[DONE]') break;
-          const chunk: string = JSON.parse(payload);
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + chunk } : m))
-          );
-        }
-      }
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, text: 'Sorry, something went wrong.' } : m
-        )
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return { messages, loading, sendMessage };
-}
-```
+Export a `useChat` hook that manages a list of `Message` objects (`id`, `role: 'user' | 'assistant'`, `text`) and a `loading` boolean. `sendMessage(text)` should:
+1. Append the user message and an empty assistant message immediately
+2. `POST /api/chat` with `{ message: text }`
+3. Read the SSE `ReadableStream` line-by-line; for each `data:` line that isn't `[DONE]`, JSON-parse the chunk and append it to the assistant message's text
+4. Set `loading` to false when the stream ends or on error; on error, replace the assistant message with a fallback string
 
 **`ui/src/components/Message.tsx`**
 
@@ -124,18 +62,6 @@ Full-height flex column layout (`h-full`):
 2. **Message list** — `flex-1 overflow-y-auto`, auto-scrolls to bottom on new messages (`useRef` + `scrollIntoView`)
 3. **Empty state** — centered icon, greeting text, and two quick-reply suggestion buttons (`"Where is my order ORD-001?"`, `"I want to refund order ORD-456"`)
 4. **Input bar** — `<form>` pinned at bottom; `<textarea>` (single row, max-height 8rem, Enter submits, Shift+Enter newline) + icon send button; both disabled while `loading`
-
-**`ui/src/App.tsx`**
-```tsx
-import './index.css';
-import { ChatWindow } from './components/ChatWindow';
-export default function App() { return <ChatWindow />; }
-```
-
-**`ui/src/index.css`** — import Tailwind:
-```css
-@import "tailwindcss";
-```
 
 ## Conventions
 - No `any` types anywhere
