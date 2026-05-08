@@ -24,6 +24,13 @@ echo "==> Packaging deployment ZIP..."
 rm -f deployment_package.zip
 zip -r deployment_package.zip dist/ node_modules/ package.json
 
+echo "==> Ensuring S3 bucket exists..."
+if ! aws s3api head-bucket --bucket "${S3_BUCKET}" --region "${AWS_REGION}" 2>/dev/null; then
+  aws s3api create-bucket --bucket "${S3_BUCKET}" --region "${AWS_REGION}" \
+    --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+  echo "    Created bucket ${S3_BUCKET}"
+fi
+
 echo "==> Uploading to S3 (s3://${S3_BUCKET}/${S3_KEY})..."
 aws s3 cp deployment_package.zip "s3://${S3_BUCKET}/${S3_KEY}" \
   --region "${AWS_REGION}"
