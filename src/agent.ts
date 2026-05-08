@@ -5,10 +5,16 @@ import { dirname, join } from 'path';
 import { getOrderStatus } from './tools/getOrderStatus.js';
 import { refundAgentTool } from './subagents/refundAgent.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const promptPath = existsSync(join(__dirname, 'prompts/prompt.md'))
-  ? join(__dirname, 'prompts/prompt.md')
-  : join(__dirname, '../src/prompts/prompt.md');
+const __src_dir = typeof __dirname !== 'undefined'
+  ? __dirname
+  : dirname(fileURLToPath(import.meta.url));
+
+const promptCandidates = [
+  join(__src_dir, 'prompts/prompt.md'),
+  join(__src_dir, '../src/prompts/prompt.md'),
+  join(process.cwd(), 'prompts/prompt.md'),
+];
+const promptPath = promptCandidates.find(existsSync) ?? promptCandidates[0];
 const systemPrompt = readFileSync(promptPath, 'utf-8');
 
 export const agent = new Agent({

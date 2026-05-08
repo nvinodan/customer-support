@@ -5,26 +5,29 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
 RUNTIME_NAME="${RUNTIME_NAME:-customer_support_agent}"
-ECR_REPO_NAME="${ECR_REPO_NAME:-$RUNTIME_NAME}"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
 ROLE_NAME="${ROLE_NAME:-${RUNTIME_NAME}-execution-role}"
 
-ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+S3_BUCKET="bedrock-agentcore-code-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+S3_KEY="${RUNTIME_NAME}/deployment_package.zip"
+ENTRY_POINT="dist/runtime.js"
 
-echo "==> Building Docker image (ARM64)..."
-docker build --platform linux/arm64 -t "${ECR_REPO_NAME}:${IMAGE_TAG}" .
+echo "==> Building TypeScript..."
+npx tsc -p tsconfig.build.json
 
-echo "==> Ensuring ECR repository exists..."
-aws ecr describe-repositories --repository-names "${ECR_REPO_NAME}" --region "${AWS_REGION}" 2>/dev/null || \
-  aws ecr create-repository --repository-name "${ECR_REPO_NAME}" --region "${AWS_REGION}"
+echo "==> Copying runtime assets..."
+cp -r src/prompts dist/prompts
 
-echo "==> Authenticating with ECR..."
-aws ecr get-login-password --region "${AWS_REGION}" | \
-  docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+echo "==> Installing production dependencies..."
+npm ci --omit=dev
 
-echo "==> Tagging and pushing image..."
-docker tag "${ECR_REPO_NAME}:${IMAGE_TAG}" "${ECR_URI}:${IMAGE_TAG}"
-docker push "${ECR_URI}:${IMAGE_TAG}"
+echo "==> Packaging deployment ZIP..."
+rm -f deployment_package.zip
+zip -r deployment_package.zip dist/ node_modules/ package.json
+
+echo "==> Uploading to S3 (s3://${S3_BUCKET}/${S3_KEY})..."
+aws s3 cp deployment_package.zip "s3://${S3_BUCKET}/${S3_KEY}" \
+  --expected-bucket-owner "${AWS_ACCOUNT_ID}" \
+  --region "${AWS_REGION}"
 
 echo "==> Ensuring IAM execution role exists..."
 ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ROLE_NAME}"
@@ -51,21 +54,6 @@ INLINE_POLICY=$(cat <<POLICY
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ECRImageAccess",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-      ],
-      "Resource": "arn:aws:ecr:${AWS_REGION}:${AWS_ACCOUNT_ID}:repository/*"
-    },
-    {
-      "Sid": "ECRTokenAccess",
-      "Effect": "Allow",
-      "Action": "ecr:GetAuthorizationToken",
-      "Resource": "*"
-    },
-    {
       "Effect": "Allow",
       "Action": [
         "logs:DescribeLogStreams",
@@ -85,26 +73,6 @@ INLINE_POLICY=$(cat <<POLICY
         "logs:PutLogEvents"
       ],
       "Resource": "arn:aws:logs:${AWS_REGION}:${AWS_ACCOUNT_ID}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "xray:PutTraceSegments",
-        "xray:PutTelemetryRecords",
-        "xray:GetSamplingRules",
-        "xray:GetSamplingTargets"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "cloudwatch:PutMetricData",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "cloudwatch:namespace": "bedrock-agentcore"
-        }
-      }
     },
     {
       "Sid": "BedrockModelAccess",
@@ -151,13 +119,13 @@ sleep 15
 
 echo "==> Creating or updating AgentCore runtime..."
 
-# Try to create first; if it already exists, update instead
+ARTIFACT_CONFIG="codeConfiguration={code={s3={bucket=${S3_BUCKET},prefix=${S3_KEY}}},runtime=NODE_22,entryPoint=[${ENTRY_POINT}]}"
+
 if RESULT=$(aws bedrock-agentcore-control create-agent-runtime \
   --agent-runtime-name "${RUNTIME_NAME}" \
-  --agent-runtime-artifact "containerConfiguration={containerUri=${ECR_URI}:${IMAGE_TAG}}" \
+  --agent-runtime-artifact "${ARTIFACT_CONFIG}" \
   --role-arn "${ROLE_ARN}" \
   --network-configuration networkMode=PUBLIC \
-  --protocol-configuration serverProtocol=HTTP \
   --region "${AWS_REGION}" 2>&1); then
   echo "==> Runtime created."
 else
@@ -174,7 +142,7 @@ else
     echo "    Found runtime ID: ${RUNTIME_ID}"
     RESULT=$(aws bedrock-agentcore-control update-agent-runtime \
       --agent-runtime-id "${RUNTIME_ID}" \
-      --agent-runtime-artifact "containerConfiguration={containerUri=${ECR_URI}:${IMAGE_TAG}}" \
+      --agent-runtime-artifact "${ARTIFACT_CONFIG}" \
       --role-arn "${ROLE_ARN}" \
       --network-configuration networkMode=PUBLIC \
       --region "${AWS_REGION}")
@@ -200,3 +168,5 @@ else
   echo "    Set this in your proxy server:"
   echo "    export AGENT_RUNTIME_ARN=${RUNTIME_ARN}"
 fi
+
+rm -f deployment_package.zip
