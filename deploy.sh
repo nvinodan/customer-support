@@ -26,8 +26,7 @@ zip -r deployment_package.zip dist/ node_modules/ package.json
 
 echo "==> Ensuring S3 bucket exists..."
 if ! aws s3api head-bucket --bucket "${S3_BUCKET}" --region "${AWS_REGION}" 2>/dev/null; then
-  aws s3api create-bucket --bucket "${S3_BUCKET}" --region "${AWS_REGION}" \
-    --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+  aws s3api create-bucket --bucket "${S3_BUCKET}" --region "${AWS_REGION}"
   echo "    Created bucket ${S3_BUCKET}"
 fi
 
