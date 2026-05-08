@@ -8,6 +8,7 @@ RUNTIME_NAME="${RUNTIME_NAME:-customer_support_agent}"
 CREDENTIAL_PROVIDER_NAME="${CREDENTIAL_PROVIDER_NAME:-tavily-api}"
 WORKLOAD_NAME="${WORKLOAD_NAME:-${RUNTIME_NAME}}"
 ROLE_NAME="${ROLE_NAME:-${RUNTIME_NAME}-execution-role}"
+ORDERS_TABLE="${ORDERS_TABLE:-customer_support_orders}"
 
 S3_BUCKET="bedrock-agentcore-code-${AWS_ACCOUNT_ID}-${AWS_REGION}"
 S3_KEY="${RUNTIME_NAME}/deployment_package.zip"
@@ -107,6 +108,17 @@ INLINE_POLICY=$(cat <<POLICY
       "Effect": "Allow",
       "Action": "secretsmanager:GetSecretValue",
       "Resource": "*"
+    },
+    {
+      "Sid": "DynamoDBAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${ORDERS_TABLE}"
     }
   ]
 }
@@ -231,9 +243,9 @@ fi
 
 # --- Create or update AgentCore runtime ---
 
-ENV_VARS_FLAG="--environment-variables CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
+ENV_VARS_FLAG="--environment-variables ORDERS_TABLE=${ORDERS_TABLE},CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
 if [ -n "$MEMORY_ID" ]; then
-  ENV_VARS_FLAG="--environment-variables MEMORY_ID=${MEMORY_ID},CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
+  ENV_VARS_FLAG="--environment-variables ORDERS_TABLE=${ORDERS_TABLE},MEMORY_ID=${MEMORY_ID},CREDENTIAL_PROVIDER_NAME=${CREDENTIAL_PROVIDER_NAME},WORKLOAD_NAME=${WORKLOAD_NAME}"
 fi
 
 echo "==> Creating or updating AgentCore runtime..."

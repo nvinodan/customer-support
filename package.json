@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agentcore": "latest",
+    "@aws-sdk/client-dynamodb": "^3.1045.0",
+    "@aws-sdk/lib-dynamodb": "^3.1045.0",
     "@strands-agents/sdk": "^0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
