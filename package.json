@@ -8,6 +8,7 @@
   "dependencies": {
     "@strands-agents/sdk": "^0",
     "express": "^5.2.1",
+    "xlsx": "^0.18.5",
     "zod": "^4"
   },
   "devDependencies": {

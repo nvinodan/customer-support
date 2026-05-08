@@ -1,5 +1,8 @@
 import { ZodTool } from '@strands-agents/sdk';
 import { z } from 'zod';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 type OrderStatus = {
   orderId: string;
@@ -9,26 +12,11 @@ type OrderStatus = {
   estimatedDelivery: string;
 };
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 // TODO: replace with real API call
-const mockOrders: Record<string, OrderStatus> = {
-  'ORD-123': {
-    orderId: 'ORD-123',
-    status: 'Shipped',
-    items: [{ name: 'Wireless Headphones', quantity: 1, price: 89.99 }],
-    total: 89.99,
-    estimatedDelivery: '2026-05-09',
-  },
-  'ORD-456': {
-    orderId: 'ORD-456',
-    status: 'Delivered',
-    items: [
-      { name: 'Mechanical Keyboard', quantity: 1, price: 149.00 },
-      { name: 'Mouse Pad', quantity: 1, price: 19.99 },
-    ],
-    total: 168.99,
-    estimatedDelivery: '2026-05-03',
-  },
-};
+const orders: Record<string, OrderStatus> = JSON.parse(
+  readFileSync(join(__dirname, '../data/orders.json'), 'utf-8')
+);
 
 export const getOrderStatus = new ZodTool({
   name: 'getOrderStatus',
@@ -37,7 +25,7 @@ export const getOrderStatus = new ZodTool({
     orderId: z.string().describe('The order ID to look up (e.g. ORD-123)'),
   }),
   callback: async ({ orderId }) => {
-    const order = mockOrders[orderId];
+    const order = orders[orderId];
     if (!order) {
       return { error: `Order ${orderId} not found.` };
     }
