@@ -13,7 +13,7 @@ Invoke `/agentcore-runtime` when the user asks to:
 - Create a new AgentCore runtime agent
 - Add a new tool to the existing agent
 - Fix or update the `/invocations` or `/ping` endpoint
-- Update the Dockerfile or deployment configuration
+- Update the deployment configuration
 
 ---
 
@@ -26,7 +26,8 @@ Invoke `/agentcore-runtime` when the user asks to:
 | Health endpoint | `GET /ping` |
 | Invocation endpoint | `POST /invocations` |
 | Body parser | `express.raw({ type: '*/*' })` |
-| Platform | `linux/arm64` |
+| Deploy method | Direct code deploy (ZIP to S3) |
+| Runtime | `NODE_22` (arm64) |
 
 ---
 
@@ -198,9 +199,9 @@ Add to agent: `tools: [myTool, anotherTool]`
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsc && node dist/index.js"
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/runtime.js",
+    "dev": "npx tsx src/runtime.ts"
   },
   "dependencies": {
     "@strands-agents/sdk": "latest",
@@ -209,59 +210,108 @@ Add to agent: `tools: [myTool, anotherTool]`
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "typescript": "^5.3.3"
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "tsx": "^4",
+    "typescript": "^5"
   }
 }
 ```
 
 ---
 
-## tsconfig.json
+## tsconfig.build.json (for deployment)
 
 ```json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "node16",
+    "moduleResolution": "node16",
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["*.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
 ```
 
+**Note:** Use `module: "node16"` for deployment builds. This produces ESM output (since `package.json` has `"type": "module"`) that Node 22 can run with vendored `node_modules/`.
+
 ---
 
-## Dockerfile
+## Deployment (Direct Code Deploy)
 
-```dockerfile
-FROM --platform=linux/arm64 public.ecr.aws/docker/library/node:latest
+AgentCore supports direct code deployment via ZIP file uploaded to S3. No Docker required.
 
-WORKDIR /app
+### Packaging
 
-COPY . ./
+```bash
+# Build TypeScript
+npx tsc -p tsconfig.build.json
 
-RUN npm install
+# Copy runtime assets (e.g. prompt files)
+cp -r src/prompts dist/prompts
 
-RUN npm run build
+# Install production deps only
+npm ci --omit=dev
 
-EXPOSE 8080
-
-CMD ["npm", "start"]
+# Create ZIP
+zip -r deployment_package.zip dist/ node_modules/ package.json
 ```
 
-**Rules:**
-- `--platform=linux/arm64` is mandatory (AgentCore runs ARM64 containers)
-- Use `public.ecr.aws` base image (not DockerHub)
-- `EXPOSE` port must match what the app binds to
-- `CMD` runs the compiled JS, not `ts-node`
+ZIP structure:
+```
+deployment_package.zip
+├── dist/
+│   ├── runtime.js        ← entry point
+│   ├── agent.js
+│   ├── tools/
+│   ├── prompts/
+│   └── ...
+├── node_modules/
+└── package.json
+```
+
+**Constraints:**
+- Maximum ZIP size: 250 MB (zipped), 750 MB (unzipped)
+- Architecture: arm64 only for native modules
+- Entry point must be a compiled `.js` file (not `.ts`)
+- Most npm packages (Express, Zod, etc.) are pure JS — no native module concerns
+
+### S3 bucket convention
+
+```
+bedrock-agentcore-code-${ACCOUNT_ID}-${REGION}
+```
+
+### Deploy script flow
+
+```bash
+# 1. Build and package
+npx tsc -p tsconfig.build.json
+cp -r src/prompts dist/prompts
+npm ci --omit=dev
+zip -r deployment_package.zip dist/ node_modules/ package.json
+
+# 2. Ensure S3 bucket exists
+aws s3api create-bucket --bucket bedrock-agentcore-code-${ACCOUNT_ID}-${REGION} --region ${REGION}
+
+# 3. Upload ZIP
+aws s3 cp deployment_package.zip s3://bedrock-agentcore-code-${ACCOUNT_ID}-${REGION}/${RUNTIME_NAME}/deployment_package.zip --region ${REGION}
+
+# 4. Create/update runtime
+aws bedrock-agentcore-control create-agent-runtime \
+  --agent-runtime-name ${RUNTIME_NAME} \
+  --agent-runtime-artifact "codeConfiguration={code={s3={bucket=bedrock-agentcore-code-${ACCOUNT_ID}-${REGION},prefix=${RUNTIME_NAME}/deployment_package.zip}},runtime=NODE_22,entryPoint=[dist/runtime.js]}" \
+  --role-arn ${ROLE_ARN} \
+  --network-configuration networkMode=PUBLIC \
+  --region ${REGION}
+```
 
 ---
 
@@ -274,10 +324,9 @@ The AWS CLI subcommand is `bedrock-agentcore-control` (not `bedrock-agentcore`).
 ```bash
 aws bedrock-agentcore-control create-agent-runtime \
   --agent-runtime-name my_agent \
-  --agent-runtime-artifact "containerConfiguration={containerUri=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest}" \
+  --agent-runtime-artifact "codeConfiguration={code={s3={bucket=${S3_BUCKET},prefix=${S3_KEY}}},runtime=NODE_22,entryPoint=[dist/runtime.js]}" \
   --role-arn ${ROLE_ARN} \
   --network-configuration networkMode=PUBLIC \
-  --protocol-configuration serverProtocol=HTTP \
   --region ${AWS_REGION}
 ```
 
@@ -286,7 +335,7 @@ aws bedrock-agentcore-control create-agent-runtime \
 ```bash
 aws bedrock-agentcore-control update-agent-runtime \
   --agent-runtime-id "${RUNTIME_ID}" \
-  --agent-runtime-artifact "containerConfiguration={containerUri=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest}" \
+  --agent-runtime-artifact "codeConfiguration={code={s3={bucket=${S3_BUCKET},prefix=${S3_KEY}}},runtime=NODE_22,entryPoint=[dist/runtime.js]}" \
   --role-arn ${ROLE_ARN} \
   --network-configuration networkMode=PUBLIC \
   --region ${AWS_REGION}
@@ -332,7 +381,7 @@ aws bedrock-agentcore-control delete-agent-runtime \
 
 The runtime requires an execution role with:
 - **Trust policy**: allows `bedrock-agentcore.amazonaws.com` to assume it
-- **Permissions**: ECR image pull, CloudWatch Logs, X-Ray, CloudWatch Metrics, Bedrock model invocation
+- **Permissions**: CloudWatch Logs, Bedrock model invocation
 
 ### Trust policy
 
@@ -358,21 +407,6 @@ The runtime requires an execution role with:
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ECRImageAccess",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-      ],
-      "Resource": "arn:aws:ecr:REGION:ACCOUNT_ID:repository/*"
-    },
-    {
-      "Sid": "ECRTokenAccess",
-      "Effect": "Allow",
-      "Action": "ecr:GetAuthorizationToken",
-      "Resource": "*"
-    },
-    {
       "Effect": "Allow",
       "Action": [
         "logs:DescribeLogStreams",
@@ -392,26 +426,6 @@ The runtime requires an execution role with:
         "logs:PutLogEvents"
       ],
       "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "xray:PutTraceSegments",
-        "xray:PutTelemetryRecords",
-        "xray:GetSamplingRules",
-        "xray:GetSamplingTargets"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "cloudwatch:PutMetricData",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "cloudwatch:namespace": "bedrock-agentcore"
-        }
-      }
     },
     {
       "Sid": "BedrockModelAccess",
@@ -444,7 +458,8 @@ To deploy and manage runtimes, the calling principal needs:
 - `bedrock-agentcore:ListAgentRuntimes`
 - `bedrock-agentcore:InvokeAgentRuntime`
 - `iam:PassRole` (for the execution role ARN)
-- ECR push permissions (`ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, etc.)
+- `s3:PutObject`, `s3:GetObject` on the deployment bucket
+- `s3:CreateBucket` (if bucket doesn't exist yet)
 
 ---
 
@@ -480,9 +495,10 @@ console.log(parsed.response)
 - [ ] Body parsed via `parseInvocationPayload` (handles JSON and plain text)
 - [ ] Response is always `{ response: string, status: 'success' | 'error' }`
 - [ ] Server binds to `0.0.0.0`, port 8080
-- [ ] Dockerfile uses `--platform=linux/arm64` and `public.ecr.aws` base image
-- [ ] `package.json` has `"type": "module"` and all four runtime deps
-- [ ] `tsconfig.json` uses `"module": "ESNext"`, `"moduleResolution": "bundler"`
+- [ ] `package.json` has `"type": "module"` and all runtime deps
+- [ ] `tsconfig.build.json` uses `"module": "node16"`, `"moduleResolution": "node16"`
+- [ ] ZIP includes `dist/`, `node_modules/`, and `package.json`
+- [ ] Entry point is a compiled `.js` file in `dist/`
 - [ ] Execution role has trust policy for `bedrock-agentcore.amazonaws.com`
-- [ ] Execution role has ECR pull, CloudWatch Logs, X-Ray, and Bedrock invoke permissions
-- [ ] Caller has `bedrock-agentcore:*` and `iam:PassRole` permissions
+- [ ] Execution role has CloudWatch Logs and Bedrock invoke permissions
+- [ ] Caller has `bedrock-agentcore:*`, `iam:PassRole`, and S3 permissions

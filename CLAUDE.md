@@ -3,7 +3,7 @@
 A customer support agent on AWS Bedrock (Strands Agents SDK) with a React streaming chat UI, deployable as an AgentCore runtime.
 
 ## Stack
-- **Runtime**: TypeScript, Express, `@strands-agents/sdk`, Zod — AgentCore container (ARM64)
+- **Runtime**: TypeScript, Express, `@strands-agents/sdk`, Zod — AgentCore direct code deploy (NODE_22)
 - **Proxy**: TypeScript, Express, `@aws-sdk/client-bedrock-agentcore` — bridges UI to AgentCore
 - **Frontend**: React + Vite + Tailwind CSS (`ui/`), native `fetch` with `ReadableStream`
 
@@ -55,9 +55,8 @@ ui/
     components/ChatWindow.tsx
     components/Message.tsx
     hooks/useChat.ts
-Dockerfile          — ARM64 container for AgentCore
-deploy.sh           — Build, push to ECR, create/update runtime, set up memory
-tsconfig.build.json — Compilation config for container
+deploy.sh           — Build, package ZIP, upload to S3, create/update runtime
+tsconfig.build.json — Compilation config 
 ```
 
 ## API
@@ -75,7 +74,7 @@ tsconfig.build.json — Compilation config for container
 |---|---|---|
 | `AWS_REGION` | runtime, proxy, deploy | AWS region (default: us-east-1) |
 | `AGENT_RUNTIME_ARN` | proxy | ARN of the deployed AgentCore runtime |
-| `AWS_ACCOUNT_ID` | deploy | AWS account for ECR/AgentCore |
+| `AWS_ACCOUNT_ID` | deploy | AWS account for S3/AgentCore |
 | `PORT` | runtime, proxy | Listen port (runtime: 8080, proxy: 3001) |
 | `MEMORY_ID` | runtime, server | AgentCore Memory resource ID (optional — memory disabled if unset) |
 
