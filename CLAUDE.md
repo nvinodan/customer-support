@@ -44,8 +44,9 @@ src/
   memory.ts         — AgentCore Memory retrieve/store (graceful no-op if MEMORY_ID unset)
   prompts/prompt.md — system prompt (loaded at runtime)
   tools/
-    getOrderStatus.ts   — mock order lookup
-    initiateRefund.ts   — mock refund processor
+    getOrderStatus.ts   — order lookup (DynamoDB)
+    listOrders.ts       — list all orders (DynamoDB)
+    initiateRefund.ts   — refund processor (DynamoDB)
   subagents/
     refundAgent.ts  — refund specialist sub-agent
 ui/
@@ -56,7 +57,9 @@ ui/
     components/Message.tsx
     hooks/useChat.ts
 deploy.sh           — Build, package ZIP, upload to S3, create/update runtime
-tsconfig.build.json — Compilation config 
+tsconfig.build.json — Compilation config
+scripts/
+  setup-dynamodb.ts — Create and seed the DynamoDB orders table (idempotent)
 ```
 
 ## API
@@ -77,9 +80,17 @@ tsconfig.build.json — Compilation config
 | `AWS_ACCOUNT_ID` | deploy | AWS account for S3/AgentCore |
 | `PORT` | runtime, proxy | Listen port (runtime: 8080, proxy: 3001) |
 | `MEMORY_ID` | runtime, server | AgentCore Memory resource ID (optional — memory disabled if unset) |
+| `ORDERS_TABLE` | runtime, server | DynamoDB table name (default: customer_support_orders) |
+
+## Data Setup
+
+```bash
+# Create and seed the DynamoDB orders table (idempotent, safe to re-run)
+npx tsx scripts/setup-dynamodb.ts
+```
 
 ## Conventions
 - No `any` types
 - System prompt from file, not hardcoded
-- Tool files export one `ZodTool`; mock data stays in the file with `// TODO: replace with real API call`
+- Tool files export one `ZodTool`; data backed by DynamoDB (`ORDERS_TABLE`)
 - Frontend state in hooks only; no Redux/Zustand

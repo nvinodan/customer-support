@@ -30,10 +30,13 @@ git checkout <branch-name>
 
 ## Running the project
 
-### Local development (no AWS required)
+### Local development
 
 ```bash
 npm install
+
+# Create and seed the DynamoDB orders table (requires AWS credentials)
+npx tsx scripts/setup-dynamodb.ts
 
 # CLI mode
 npx tsx src/index.ts
@@ -57,22 +60,36 @@ curl -X POST http://localhost:8080/invocations \
 
 ### Deploy to AWS AgentCore
 
+Run these scripts in order:
+
 ```bash
-# Set required env vars
 export AWS_ACCOUNT_ID=123456789012
 export AWS_REGION=us-east-1  # optional, defaults to us-east-1
 
-# Build, push to ECR, and create/update runtime
+# 1. Create the credential provider for external API access (e.g. Tavily)
+./create-credential.sh create tavily-api <your-api-key>
+
+# 2. Create and seed the DynamoDB orders table
+npx tsx scripts/setup-dynamodb.ts
+
+# 3. Build, package, and deploy the AgentCore runtime
 ./deploy.sh
 ```
 
+| Step | Script | Purpose |
+|------|--------|---------|
+| 1 | `./create-credential.sh` | Registers an API key as an AgentCore credential provider |
+| 2 | `npx tsx scripts/setup-dynamodb.ts` | Creates the DynamoDB table and seeds sample order data |
+| 3 | `./deploy.sh` | Builds, uploads, and creates/updates the AgentCore runtime |
+
+All three scripts are idempotent — safe to re-run.
+
 The deploy script will:
-1. Build the Docker image (ARM64)
-2. Create the ECR repository if needed
-3. Push the image
-4. Create the IAM execution role with required permissions
-5. Create AgentCore Memory (session-scoped, for conversational context)
-6. Create or update the AgentCore runtime (with `MEMORY_ID` env var)
+1. Build TypeScript and package a deployment ZIP
+2. Upload to S3
+3. Create the IAM execution role with required permissions (including DynamoDB access)
+4. Create AgentCore Memory (session-scoped, for conversational context)
+5. Create or update the AgentCore runtime (with `MEMORY_ID`, `ORDERS_TABLE` env vars)
 
 ### Connect the UI to a deployed runtime
 
@@ -80,7 +97,6 @@ The deploy script will:
 # Set the ARN output from deploy.sh
 export AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/customer_support_agent-xxxxx
 
-export MEMORY_ID=arn:aws:bedrock-agentcore:us-east-1:12345678012:memory/customer_agent_memory-xxxxxx
 
 # Start the proxy (bridges UI requests to AgentCore)
 npx tsx src/proxy.ts  # port 3001
@@ -94,9 +110,10 @@ cd ui && npm run dev  # port 5173
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `AWS_REGION` | No | `us-east-1` | AWS region |
-| `AWS_ACCOUNT_ID` | Deploy only | — | AWS account for ECR and AgentCore |
+| `AWS_ACCOUNT_ID` | Deploy only | — | AWS account for S3 and AgentCore |
 | `AGENT_RUNTIME_ARN` | Proxy only | — | ARN of the deployed AgentCore runtime |
 | `MEMORY_ID` | No | — | AgentCore Memory resource ID (memory disabled if unset) |
+| `ORDERS_TABLE` | No | `customer_support_orders` | DynamoDB table name for order data |
 | `PORT` | No | `8080` (runtime) / `3001` (proxy/server) | Listen port |
 
 ## Project structure
@@ -111,11 +128,13 @@ src/
   memory.ts         — AgentCore Memory (retrieve/store per session)
   prompts/prompt.md — System prompt
   tools/
-    getOrderStatus.ts   — Order lookup (mock)
-    initiateRefund.ts   — Refund processor (mock)
+    getOrderStatus.ts   — Order lookup (DynamoDB)
+    listOrders.ts       — List all orders (DynamoDB)
+    initiateRefund.ts   — Refund processor (DynamoDB)
   subagents/
     refundAgent.ts      — Refund specialist sub-agent
 ui/                 — React + Vite + Tailwind frontend
-Dockerfile          — ARM64 container for AgentCore
-deploy.sh           — Build, push, deploy, and set up memory
+scripts/
+  setup-dynamodb.ts — Create and seed DynamoDB orders table (idempotent)
+deploy.sh           — Build, package, deploy, and set up memory
 ```
