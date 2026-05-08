@@ -26,7 +26,6 @@ zip -r deployment_package.zip dist/ node_modules/ package.json
 
 echo "==> Uploading to S3 (s3://${S3_BUCKET}/${S3_KEY})..."
 aws s3 cp deployment_package.zip "s3://${S3_BUCKET}/${S3_KEY}" \
-  --expected-bucket-owner "${AWS_ACCOUNT_ID}" \
   --region "${AWS_REGION}"
 
 echo "==> Ensuring IAM execution role exists..."
