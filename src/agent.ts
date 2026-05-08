@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { getOrderStatus } from './tools/getOrderStatus.js';
+import { listOrders } from './tools/listOrders.js';
 import { searchNews } from './tools/searchNews.js';
 import { refundAgentTool } from './subagents/refundAgent.js';
 
@@ -20,6 +21,6 @@ const systemPrompt = readFileSync(promptPath, 'utf-8');
 
 export const agent = new Agent({
   systemPrompt,
-  tools: [getOrderStatus, searchNews, refundAgentTool],
+  tools: [getOrderStatus, listOrders, searchNews, refundAgentTool],
   name: 'Customer Support Agent',
 });

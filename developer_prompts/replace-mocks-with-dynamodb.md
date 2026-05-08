@@ -8,7 +8,7 @@ Replace all hardcoded mock data in the agent's tools with a real DynamoDB table,
 
 ## Context
 
-The agent's tools currently use inline hardcoded data (marked with `// TODO: replace with real API call`). This works for demos but needs to be backed by a real data store for the deployed AgentCore runtime.
+The agent's tools currently use inline hardcoded data. This works for demos but needs to be backed by a real data store for the deployed AgentCore runtime.
 
 ---
 

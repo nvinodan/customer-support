@@ -116,7 +116,8 @@ INLINE_POLICY=$(cat <<POLICY
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
-        "dynamodb:Query"
+        "dynamodb:Query",
+        "dynamodb:Scan"
       ],
       "Resource": "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${ORDERS_TABLE}"
     }
