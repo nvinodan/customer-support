@@ -29,6 +29,78 @@ const SEED_ORDERS = [
     total: 168.99,
     estimatedDelivery: '2026-05-03',
   },
+  {
+    orderId: 'ORD-789',
+    status: 'Processing',
+    items: [
+      { name: 'USB-C Hub', quantity: 2, price: 34.99 },
+      { name: 'HDMI Cable', quantity: 1, price: 12.99 },
+    ],
+    total: 82.97,
+    estimatedDelivery: '2026-05-14',
+  },
+  {
+    orderId: 'ORD-1001',
+    status: 'Delivered',
+    items: [{ name: '27" 4K Monitor', quantity: 1, price: 449.0 }],
+    total: 449.0,
+    estimatedDelivery: '2026-04-28',
+  },
+  {
+    orderId: 'ORD-1002',
+    status: 'Shipped',
+    items: [
+      { name: 'Standing Desk Frame', quantity: 1, price: 299.0 },
+      { name: 'Desk Mat XL', quantity: 1, price: 39.99 },
+    ],
+    total: 338.99,
+    estimatedDelivery: '2026-05-11',
+  },
+  {
+    orderId: 'ORD-1003',
+    status: 'Delivered',
+    items: [
+      { name: 'Webcam HD Pro', quantity: 1, price: 79.99 },
+      { name: 'Ring Light', quantity: 1, price: 24.99 },
+      { name: 'Tripod Mount', quantity: 1, price: 15.99 },
+    ],
+    total: 120.97,
+    estimatedDelivery: '2026-04-30',
+  },
+  {
+    orderId: 'ORD-1004',
+    status: 'Cancelled',
+    items: [{ name: 'Ergonomic Chair', quantity: 1, price: 599.0 }],
+    total: 599.0,
+    estimatedDelivery: '2026-05-15',
+  },
+  {
+    orderId: 'ORD-1005',
+    status: 'Delivered',
+    items: [
+      { name: 'Noise Cancelling Earbuds', quantity: 1, price: 129.99 },
+      { name: 'Carrying Case', quantity: 1, price: 19.99 },
+    ],
+    total: 149.98,
+    estimatedDelivery: '2026-05-01',
+  },
+  {
+    orderId: 'ORD-1006',
+    status: 'Processing',
+    items: [{ name: 'Mechanical Numpad', quantity: 1, price: 59.99 }],
+    total: 59.99,
+    estimatedDelivery: '2026-05-16',
+  },
+  {
+    orderId: 'ORD-1007',
+    status: 'Shipped',
+    items: [
+      { name: 'Laptop Stand', quantity: 1, price: 49.99 },
+      { name: 'Wireless Charger', quantity: 2, price: 29.99 },
+    ],
+    total: 109.97,
+    estimatedDelivery: '2026-05-12',
+  },
 ];
 
 async function tableExists(): Promise<boolean> {
