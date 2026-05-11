@@ -9,9 +9,11 @@ Click Ctrl(Cmd) + Shift + P, Open User Settings JSON in VS Code.
 
 Add this
 
+```
 "claudeCode.environmentVariables": [
   { "name": "CLAUDE_CODE_USE_BEDROCK", "value": "1" },
   { "name": "AWS_REGION", "value": "us-west-2" },
   { "name": "AWS_ACCESS_KEY_ID", "value": "your-key-id" },
   { "name": "AWS_SECRET_ACCESS_KEY", "value": "your-secret" }
 ]
+```
